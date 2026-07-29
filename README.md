@@ -1,2 +1,1 @@
-# sabores-da-andreia
-Cardápio digital para a loja Sabores da Andréia.
+Cardápio digital Loja Sabores da Andreia.
