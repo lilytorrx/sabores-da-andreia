@@ -133,11 +133,29 @@ export const allMenuItems: MenuItem[] = [
   ...categories.flatMap((c) => c.items),
 ];
 
-// Retorna 1 prato do dia entre os disponíveis. Muda apenas no dia seguinte.
+const BRAZIL_TIME_ZONE = "America/Sao_Paulo";
+
+// Retorna a data (ano-mês-dia) sempre no fuso de São Paulo, independente de
+// onde o código roda (servidor em UTC na Vercel, ou navegador do cliente).
+// Sem isso, o "dia" muda 3h mais cedo (às 21h) e pode divergir entre o
+// HTML renderizado no servidor e o hidratado no cliente perto da virada.
+function getBrazilDateKey(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BRAZIL_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+// Retorna 1 prato do dia entre os disponíveis. Muda apenas no dia seguinte
+// (considerando meia-noite no horário de São Paulo).
 export function getPratoDoDia(date = new Date()): MenuItem | undefined {
   const pool = pratosDoDiaPool;
   if (pool.length === 0) return undefined;
-  const key = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+  const key = getBrazilDateKey(date);
   let seed = 0;
   for (let i = 0; i < key.length; i++) {
     seed = (seed * 31 + key.charCodeAt(i)) >>> 0;
@@ -145,6 +163,23 @@ export function getPratoDoDia(date = new Date()): MenuItem | undefined {
   const rng = mulberry32(seed);
   const idx = Math.floor(rng() * pool.length);
   return pool[idx];
+}
+
+// Quantos ms faltam até a próxima meia-noite no horário de São Paulo.
+// Use com setTimeout/setInterval no componente pra re-sortear o prato do dia
+// automaticamente, sem precisar de reload da página.
+export function msUntilNextBrazilMidnight(date = new Date()): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: BRAZIL_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const secondsSinceMidnight = get("hour") * 3600 + get("minute") * 60 + get("second");
+  const secondsUntilMidnight = 24 * 3600 - secondsSinceMidnight;
+  return secondsUntilMidnight * 1000;
 }
 
 function mulberry32(a: number) {
