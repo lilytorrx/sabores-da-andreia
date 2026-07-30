@@ -133,10 +133,10 @@ export const allMenuItems: MenuItem[] = [
   ...categories.flatMap((c) => c.items),
 ];
 
-// Sorteia 1 prato do dia entre os disponíveis. Muda apenas no dia seguinte.
-export function getPratosDoDia(date = new Date()): MenuItem[] {
+// Retorna 1 prato do dia entre os disponíveis. Muda apenas no dia seguinte.
+export function getPratoDoDia(date = new Date()): MenuItem | undefined {
   const pool = pratosDoDiaPool;
-  if (pool.length === 0) return [];
+  if (pool.length === 0) return undefined;
   const key = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
   let seed = 0;
   for (let i = 0; i < key.length; i++) {
@@ -144,7 +144,7 @@ export function getPratosDoDia(date = new Date()): MenuItem[] {
   }
   const rng = mulberry32(seed);
   const idx = Math.floor(rng() * pool.length);
-  return [pool[idx]];
+  return pool[idx];
 }
 
 function mulberry32(a: number) {

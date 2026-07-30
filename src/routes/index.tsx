@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   categories,
-  getPratosDoDia,
+  getPratoDoDia,
   acompanhamentos,
   buildWhatsappUrl,
   WHATSAPP_NUMBER,
@@ -159,7 +159,7 @@ function PratoCard({ item, onAdd }: { item: MenuItem; onAdd: () => void }) {
 }
 
 function Home() {
-  const pratosDoDia = useMemo(() => getPratosDoDia(new Date()), []);
+  const pratoDoDia = useMemo(() => getPratoDoDia(new Date()), []);
   const { cart, add, inc, dec, remove, clear, hydrated } = useCart();
   const [openCart, setOpenCart] = useState(false);
   const [acomp, setAcomp] = useState<string>(acompanhamentos[0]);
@@ -271,13 +271,13 @@ function Home() {
             </span>
           </div>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {pratosDoDia.map((item) => (
-              <PratoCard
-                key={item.id}
-                item={item}
-                onAdd={() => handleAdd(item)}
-              />
-            ))}
+            {pratoDoDia ? (
+            <PratoCard
+              key={pratoDoDia.id}
+              item={pratoDoDia}
+              onAdd={() => handleAdd(pratoDoDia)}
+            />
+          ) : null}
           </div>
         </section>
 
