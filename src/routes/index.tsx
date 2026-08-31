@@ -16,6 +16,7 @@ export const Route = createFileRoute("/")({
 });
 
 type CartLine = { item: MenuItem; qty: number; acompanhamento?: string };
+type TodayMenu = { dailyDish: MenuItem | null; sideDishes: { name: string }[] };
 
 const CART_KEY = "sda-cart-v1";
 
@@ -62,8 +63,7 @@ function useCart() {
       next[idx] = { ...next[idx], qty: next[idx].qty + 1 };
       return next;
     });
-  const remove = (idx: number) =>
-    setCart((prev) => prev.filter((_, i) => i !== idx));
+  const remove = (idx: number) => setCart((prev) => prev.filter((_, i) => i !== idx));
   const clear = () => setCart([]);
 
   return { cart, add, dec, inc, remove, clear, hydrated };
@@ -71,11 +71,7 @@ function useCart() {
 
 function Logo({ className = "" }: { className?: string }) {
   return (
-    <img
-      src={logoImg}
-      alt="Logo Sabores da Andréia"
-      className={`object-contain ${className}`}
-    />
+    <img src={logoImg} alt="Logo Sabores da Andréia" className={`object-contain ${className}`} />
   );
 }
 
@@ -83,13 +79,7 @@ function formatBRL(v: number) {
   return v.toFixed(2).replace(".", ",");
 }
 
-function ItemCard({
-  item,
-  onAdd,
-}: {
-  item: MenuItem;
-  onAdd: (acomp?: string) => void;
-}) {
+function ItemCard({ item, onAdd }: { item: MenuItem; onAdd: (acomp?: string) => void }) {
   const imageSrc = itemImages[item.id] ?? logoImg;
 
   return (
@@ -101,12 +91,8 @@ function ItemCard({
         loading="lazy"
       />
       <div className="min-w-0 flex-1">
-        <h4 className="font-serif text-base font-semibold text-foreground">
-          {item.name}
-        </h4>
-        <p className="mt-1 text-sm text-rose font-semibold">
-          R$ {formatBRL(item.price)}
-        </p>
+        <h4 className="font-serif text-base font-semibold text-foreground">{item.name}</h4>
+        <p className="mt-1 text-sm text-rose font-semibold">R$ {formatBRL(item.price)}</p>
       </div>
       <button
         type="button"
@@ -126,24 +112,15 @@ function PratoCard({ item, onAdd }: { item: MenuItem; onAdd: () => void }) {
   return (
     <article className="group flex flex-col overflow-hidden rounded-3xl border border-rose/30 bg-card shadow-sm transition hover:shadow-lg hover:-translate-y-1">
       <div className="relative aspect-[4/3] overflow-hidden bg-rose-soft/20">
-        <img
-          src={imageSrc}
-          alt={item.name}
-          className="h-full w-full object-cover"
-          loading="lazy"
-        />
+        <img src={imageSrc} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
         <span className="absolute left-3 top-3 rounded-full bg-rose px-3 py-1 text-xs font-semibold text-primary-foreground shadow">
           Prato do dia
         </span>
       </div>
       <div className="flex flex-1 items-center justify-between gap-3 p-4">
         <div className="min-w-0">
-          <h4 className="font-serif text-base font-semibold text-foreground">
-            {item.name}
-          </h4>
-          <p className="mt-1 text-lg text-rose font-bold">
-            R$ {formatBRL(item.price)}
-          </p>
+          <h4 className="font-serif text-base font-semibold text-foreground">{item.name}</h4>
+          <p className="mt-1 text-lg text-rose font-bold">R$ {formatBRL(item.price)}</p>
         </div>
         <button
           type="button"
@@ -159,10 +136,33 @@ function PratoCard({ item, onAdd }: { item: MenuItem; onAdd: () => void }) {
 }
 
 function Home() {
-  const pratoDoDia = useMemo(() => getPratoDoDia(new Date()), []);
+  const fallbackPrato = useMemo(() => getPratoDoDia(new Date()), []);
+  const [todayMenu, setTodayMenu] = useState<TodayMenu | null>(null);
   const { cart, add, inc, dec, remove, clear, hydrated } = useCart();
   const [openCart, setOpenCart] = useState(false);
+  const activeAcompanhamentos = todayMenu?.sideDishes.map((item) => item.name) ?? acompanhamentos;
+  const pratoDoDia = todayMenu?.dailyDish ?? fallbackPrato;
   const [acomp, setAcomp] = useState<string>(acompanhamentos[0]);
+
+  useEffect(() => {
+    const loadTodayMenu = () => {
+      fetch("/api/menu/today")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: TodayMenu | null) => {
+          if (!data) return;
+          setTodayMenu(data);
+          setAcomp((current) =>
+            data.sideDishes.some((item) => item.name === current)
+              ? current
+              : (data.sideDishes[0]?.name ?? ""),
+          );
+        })
+        .catch(() => undefined);
+    };
+    loadTodayMenu();
+    const interval = window.setInterval(loadTodayMenu, 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const totalItems = cart.reduce((s, l) => s + l.qty, 0);
   const totalPrice = cart.reduce((s, l) => s + l.qty * l.item.price, 0);
@@ -175,6 +175,7 @@ function Home() {
 
   const handleAdd = (item: MenuItem) => {
     const needsAcomp = isALaCarteItem(item.id);
+    if (needsAcomp && !acomp) return;
     add(item, needsAcomp ? acomp : undefined);
     setOpenCart(true);
   };
@@ -201,9 +202,7 @@ function Home() {
               <p className="font-serif text-base font-bold text-foreground sm:text-lg">
                 Sabores da Andréia
               </p>
-              <p className="font-script text-sm text-rose sm:text-base">
-                Comida Caseira
-              </p>
+              <p className="font-script text-sm text-rose sm:text-base">Comida Caseira</p>
             </div>
           </div>
           <button
@@ -218,6 +217,12 @@ function Home() {
               </span>
             )}
           </button>
+          <a
+            href="/admin"
+            className="hidden text-xs font-semibold text-muted-foreground hover:text-rose sm:block"
+          >
+            Painel
+          </a>
         </div>
       </header>
 
@@ -229,12 +234,10 @@ function Home() {
           <h1 className="mt-6 font-serif text-4xl font-bold text-foreground sm:text-5xl">
             Sabores da Andréia
           </h1>
-          <p className="font-script text-4xl text-rose sm:text-5xl">
-            Comida Caseira
-          </p>
+          <p className="font-script text-4xl text-rose sm:text-5xl">Comida Caseira</p>
           <p className="mx-auto mt-4 max-w-xl text-sm text-muted-foreground sm:text-base">
-            Quentinhas feitas com carinho, todos os dias. Delivery das 11h às 15h.
-            Faça seu pedido pelo WhatsApp — é só montar seu carrinho abaixo.
+            Quentinhas feitas com carinho, todos os dias. Delivery das 11h às 15h. Faça seu pedido
+            pelo WhatsApp — é só montar seu carrinho abaixo.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <a
@@ -263,35 +266,33 @@ function Home() {
               <p className="font-script text-2xl text-rose">Hoje na cozinha</p>
               <h2 className="font-serif text-3xl font-bold">Prato do Dia</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Um prato especial sorteado diariamente. Amanhã tem novidade!
+                Escolhido diariamente pela nossa cozinha. Amanhã tem novidade!
               </p>
             </div>
             <span className="hidden text-xs text-muted-foreground sm:block">
-              Atualiza automaticamente à meia-noite
+              Atualizado pela cozinha
             </span>
           </div>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {pratoDoDia ? (
-            <PratoCard
-              key={pratoDoDia.id}
-              item={pratoDoDia}
-              onAdd={() => handleAdd(pratoDoDia)}
-            />
-          ) : null}
+              <PratoCard
+                key={pratoDoDia.id}
+                item={pratoDoDia}
+                onAdd={() => handleAdd(pratoDoDia)}
+              />
+            ) : null}
           </div>
         </section>
 
         {/* Acompanhamentos picker */}
         <section className="my-6 rounded-2xl border border-rose-soft bg-card p-5 shadow-sm">
-          <h3 className="font-serif text-lg font-semibold">
-            Escolha seu acompanhamento
-          </h3>
+          <h3 className="font-serif text-lg font-semibold">Escolha seu acompanhamento</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Aplicado às quentinhas à la carte que você adicionar. As quentinhas já
-            vêm com arroz, feijão, macarrão e farofa.
+            Aplicado às quentinhas à la carte que você adicionar. As quentinhas já vêm com arroz,
+            feijão, macarrão e farofa.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            {acompanhamentos.map((a) => (
+            {activeAcompanhamentos.map((a) => (
               <button
                 key={a}
                 type="button"
@@ -306,26 +307,23 @@ function Home() {
               </button>
             ))}
           </div>
+          {todayMenu && activeAcompanhamentos.length === 0 && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Os acompanhamentos de hoje já se esgotaram.
+            </p>
+          )}
         </section>
 
         {/* Categories */}
         {categories.map((cat) => (
           <section key={cat.id} className="py-8">
             <div className="mb-5">
-              <h2 className="font-serif text-2xl font-bold sm:text-3xl">
-                {cat.title}
-              </h2>
-              {cat.note && (
-                <p className="mt-1 text-sm text-muted-foreground">{cat.note}</p>
-              )}
+              <h2 className="font-serif text-2xl font-bold sm:text-3xl">{cat.title}</h2>
+              {cat.note && <p className="mt-1 text-sm text-muted-foreground">{cat.note}</p>}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {cat.items.map((item) => (
-                <ItemCard
-                  key={item.id}
-                  item={item}
-                  onAdd={() => handleAdd(item)}
-                />
+                <ItemCard key={item.id} item={item} onAdd={() => handleAdd(item)} />
               ))}
             </div>
           </section>
@@ -420,9 +418,7 @@ function Home() {
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="font-serif text-sm font-semibold">
-                            {line.item.name}
-                          </p>
+                          <p className="font-serif text-sm font-semibold">{line.item.name}</p>
                           {line.acompanhamento && (
                             <p className="text-xs text-muted-foreground">
                               Acomp.: {line.acompanhamento}
@@ -450,9 +446,7 @@ function Home() {
                         >
                           −
                         </button>
-                        <span className="w-6 text-center font-semibold">
-                          {line.qty}
-                        </span>
+                        <span className="w-6 text-center font-semibold">{line.qty}</span>
                         <button
                           type="button"
                           onClick={() => inc(idx)}
